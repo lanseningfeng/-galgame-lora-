@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Studio</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #0e0f11; --surface: #161719; --surface2: #1e2024;
+      --border: #2a2d33; --accent: #e8ff47; --accent2: #47c8ff;
+      --text: #e8eaf0; --text-muted: #7a7f8e;
+      --danger: #ff5252; --success: #52ff8a; --radius: 6px;
+      --font-mono: 'IBM Plex Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+      --tile-size: 200px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-display); background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar { width: 320px; min-width: 320px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sidebar-header { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .sidebar-header h1 { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+    .sidebar-header p { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+    .lang-switcher { display: flex; gap: 3px; }
+    .lang-btn { padding: 3px 7px; font-size: 10px; font-family: var(--font-mono); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text-muted); transition: all .12s; }
+    .lang-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .lang-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,.08); }
+    .panel { border-bottom: 1px solid var(--border); padding: 14px 16px; }
+    .panel-title { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .panel-title::before { content: ''; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; flex-shrink: 0; }
+
+    /* ── Form Controls ── */
+    label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px; font-family: var(--font-mono); }
+    input[type="number"], input[type="text"], select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: var(--radius); font-size: 13px; font-family: var(--font-mono); outline: none; transition: border-color .15s; }
+    input[type="number"]:focus, input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    select option { background: #1e2024; }
+    .row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .row > * { flex: 1; }
+    .form-group { margin-bottom: 10px; }
+
+    /* ── Buttons ── */
+    .btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 12px; border: none; border-radius: var(--radius); font-size: 12px; font-weight: 700; font-family: var(--font-display); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #0e0f11; }
+    .btn-primary:hover { background: #d4eb2a; transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-accent2 { background: rgba(71,200,255,.12); color: var(--accent2); border: 1px solid var(--accent2); }
+    .btn-accent2:hover { background: rgba(71,200,255,.22); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-danger:hover { background: rgba(255,82,82,.1); }
+    .btn-warning { background: transparent; color: #ffaa33; border: 1px solid #ffaa33; }
+    .btn-warning:hover { background: rgba(255,170,51,.1); }
+    .btn + .btn { margin-top: 6px; }
+    .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+
+    /* ── Color Presets ── */
+    .color-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .color-swatch { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all .15s; }
+    .color-swatch.active { border-color: var(--accent); transform: scale(1.15); }
+    .color-swatch.transparent-swatch { background: linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%),linear-gradient(45deg,#ccc 25%,white 25%,white 75%,#ccc 75%); background-size: 8px 8px; background-position: 0 0,4px 4px; border: 2px solid var(--border); }
+    .color-custom-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    input[type="color"] { width: 36px; height: 36px; padding: 2px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); cursor: pointer; flex-shrink: 0; }
+    .color-hex-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: var(--radius); font-size: 13px; font-family: var(--font-mono); outline: none; transition: border-color .15s; }
+    .color-hex-input:focus { border-color: var(--accent); }
+
+    /* ── Ratio Grid ── */
+    .ratio-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 10px; }
+    .ratio-btn { padding: 7px 4px; text-align: center; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); transition: all .15s; }
+    .ratio-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .ratio-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,.06); }
+
+    /* ── Toggle ── */
+    .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .toggle-label { font-size: 12px; color: var(--text); flex: 1; font-family: var(--font-mono); }
+    .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: .2s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); top: 2px; left: 2px; transition: .2s; }
+    .toggle input:checked + .toggle-slider { background: rgba(232,255,71,.15); border-color: var(--accent); }
+    .toggle input:checked + .toggle-slider::before { background: var(--accent); transform: translateX(16px); }
+
+    /* ── Slider ── */
+    .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .slider-row label { margin-bottom: 0; white-space: nowrap; flex-shrink: 0; }
+    input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; transition: transform .1s; }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none; }
+    .slider-val { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 18px; text-align: right; flex-shrink: 0; }
+
+    /* ── Log ── */
+    .log-box { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; max-height: 80px; overflow-y: auto; margin-top: 12px; }
+    .log-box::-webkit-scrollbar { width: 3px; }
+    .log-box::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* ── Main content ── */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .drop-zone { margin: 16px; border: 1.5px dashed var(--border); border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; background: var(--surface); transition: all .2s; flex-shrink: 0; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(232,255,71,.03); }
+    .drop-zone p { font-size: 13px; color: var(--text-muted); font-family: var(--font-mono); }
+    .drop-zone .drop-icon { font-size: 28px; margin-bottom: 8px; opacity: .6; }
+    .drop-zone strong { color: var(--accent); }
+    .tiles-wrapper { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+    .tiles-wrapper::-webkit-scrollbar { width: 4px; }
+    .tiles-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .tiles-container { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    /* ── Tile ── */
+    .tile { width: var(--tile-size); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; position: relative; transition: border-color .15s, width .2s, height .2s; flex-shrink: 0; }
+    .tile:hover { border-color: var(--accent2); }
+    .tile-img-holder { width: 100%; height: calc(var(--tile-size) * 0.8); display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#1a1c20 0% 25%,#232629 0% 50%) 0 0/12px 12px; position: relative; overflow: hidden; transition: height .2s; }
+    .tile-img-holder img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .tile-result { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; background: repeating-conic-gradient(#1a1c20 0% 25%,#232629 0% 50%) 0 0/12px 12px; }
+    .tile-result.visible { display: flex; }
+    .tile-result canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .tile-info { padding: 8px 10px; }
+    .tile-name { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile-dims { font-size: 10px; color: var(--border); font-family: var(--font-mono); margin-top: 2px; }
+    .tile-del { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; background: rgba(14,15,17,.85); border: 1px solid var(--border); border-radius: 50%; color: var(--danger); display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; line-height: 1; transition: all .15s; }
+    .tile:hover .tile-del { display: flex; }
+    .tile-del:hover { background: var(--danger); color: white; }
+    .tile-save { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; background: rgba(14,15,17,.85); border: 1px solid var(--border); border-radius: 50%; color: var(--accent2); display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 11px; transition: all .15s; }
+    .tile:hover .tile-save { display: flex; }
+    .tile-save:hover { background: var(--accent2); color: #0e0f11; }
+    .tile-status { position: absolute; bottom: 6px; right: 6px; font-size: 9px; font-family: var(--font-mono); background: rgba(14,15,17,.85); padding: 2px 5px; border-radius: 3px; color: var(--text-muted); }
+    .tile-status.ok { color: var(--success); }
+    /* In crop-mode, show expand icon on hover */
+    body.crop-mode .tile { cursor: pointer; }
+    .tile-expand { position: absolute; bottom: 6px; left: 6px; width: 22px; height: 22px; background: rgba(14,15,17,.85); border: 1px solid var(--border); border-radius: 4px; color: var(--accent); display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; transition: all .15s; z-index: 5; }
+    body.crop-mode .tile:hover .tile-expand { display: flex; }
+    .tile-expand:hover { background: rgba(232,255,71,.15); }
+
+    /* ── Empty state ── */
+    .empty-state { width: 100%; padding: 60px 20px; text-align: center; color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; }
+
+    /* ── Crop mode banner ── */
+    .crop-mode-banner { display: none; background: rgba(232,255,71,.08); border-bottom: 1px solid rgba(232,255,71,.3); padding: 8px 16px; font-size: 11px; font-family: var(--font-mono); color: var(--accent); text-align: center; flex-shrink: 0; }
+    body.crop-mode .crop-mode-banner { display: block; }
+
+    /* ── Crop ratio presets ── */
+    .crop-ratio-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .crop-ratio-preset { padding: 3px 7px; font-size: 10px; font-family: var(--font-mono); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text-muted); transition: all .12s; }
+    .crop-ratio-preset:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── Tile crop box (thumbnail) ── */
+    .tile-crop-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+    .tile-crop-box { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.5); box-sizing: border-box; cursor: move; z-index: 12; min-width: 10px; min-height: 10px; pointer-events: all; }
+    .tile-crop-box::before { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px) 0 33.33%/100% 33.33%, linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px) 33.33% 0/33.33% 100%; pointer-events: none; }
+    .tile-crop-handle { position: absolute; width: 8px; height: 8px; background: var(--accent); border: 1px solid #000; border-radius: 1px; z-index: 13; pointer-events: all; }
+    .tile-crop-handle.nw{top:-4px;left:-4px;cursor:nw-resize} .tile-crop-handle.n{top:-4px;left:calc(50% - 4px);cursor:n-resize} .tile-crop-handle.ne{top:-4px;right:-4px;cursor:ne-resize}
+    .tile-crop-handle.w{top:calc(50% - 4px);left:-4px;cursor:w-resize} .tile-crop-handle.e{top:calc(50% - 4px);right:-4px;cursor:e-resize}
+    .tile-crop-handle.sw{bottom:-4px;left:-4px;cursor:sw-resize} .tile-crop-handle.s{bottom:-4px;left:calc(50% - 4px);cursor:s-resize} .tile-crop-handle.se{bottom:-4px;right:-4px;cursor:se-resize}
+    .tile-crop-info { position: absolute; bottom: -20px; left: 0; font-size: 9px; font-family: var(--font-mono); background: rgba(232,255,71,.92); color: #0e0f11; padding: 2px 5px; border-radius: 3px; white-space: nowrap; pointer-events: none; z-index: 15; }
+
+    /* ── FULLSCREEN CROP LIGHTBOX ── */
+    .crop-lightbox { position: fixed; inset: 0; z-index: 1000; display: none; flex-direction: column; background: rgba(8,9,10,.97); }
+    .crop-lightbox.open { display: flex; }
+    .crop-lightbox-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+    .crop-lightbox-title { font-size: 13px; font-family: var(--font-mono); color: var(--text); }
+    .crop-lightbox-dims { font-size: 11px; font-family: var(--font-mono); color: var(--accent2); margin-left: 12px; }
+    .crop-lightbox-nav { display: flex; gap: 8px; align-items: center; }
+    .crop-nav-btn { padding: 6px 14px; font-size: 12px; font-family: var(--font-mono); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); cursor: pointer; transition: all .15s; }
+    .crop-nav-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .crop-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .crop-lightbox-counter { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); padding: 0 8px; }
+    .crop-lightbox-close { width: 32px; height: 32px; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-muted); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .crop-lightbox-close:hover { border-color: var(--danger); color: var(--danger); }
+
+    .crop-lightbox-body { flex: 1; display: flex; overflow: hidden; }
+    .crop-lightbox-canvas-area { flex: 1; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#141618 0% 25%,#1c1e22 0% 50%) 0 0/16px 16px; }
+    .crop-lb-img-wrap { position: relative; display: inline-block; }
+    .crop-lb-img-wrap img { display: block; max-width: 100%; max-height: 100%; user-select: none; pointer-events: none; }
+    .crop-lb-box { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.6); box-sizing: border-box; cursor: move; min-width: 20px; min-height: 20px; }
+    .crop-lb-box::before { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px) 0 33.33%/100% 33.33%, linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px) 33.33% 0/33.33% 100%; pointer-events: none; }
+    .crop-lb-handle { position: absolute; width: 12px; height: 12px; background: var(--accent); border: 2px solid #000; border-radius: 2px; }
+    .crop-lb-handle.nw{top:-6px;left:-6px;cursor:nw-resize} .crop-lb-handle.n{top:-6px;left:calc(50% - 6px);cursor:n-resize} .crop-lb-handle.ne{top:-6px;right:-6px;cursor:ne-resize}
+    .crop-lb-handle.w{top:calc(50% - 6px);left:-6px;cursor:w-resize} .crop-lb-handle.e{top:calc(50% - 6px);right:-6px;cursor:e-resize}
+    .crop-lb-handle.sw{bottom:-6px;left:-6px;cursor:sw-resize} .crop-lb-handle.s{bottom:-6px;left:calc(50% - 6px);cursor:s-resize} .crop-lb-handle.se{bottom:-6px;right:-6px;cursor:se-resize}
+    .crop-lb-corners span { position: absolute; width: 18px; height: 18px; border-color: var(--accent); border-style: solid; pointer-events: none; }
+    .crop-lb-corners .tl{top:-1px;left:-1px;border-width:3px 0 0 3px} .crop-lb-corners .tr{top:-1px;right:-1px;border-width:3px 3px 0 0}
+    .crop-lb-corners .bl{bottom:-1px;left:-1px;border-width:0 0 3px 3px} .crop-lb-corners .br{bottom:-1px;right:-1px;border-width:0 3px 3px 0}
+
+    .crop-lightbox-sidebar { width: 220px; min-width: 220px; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; padding: 16px; gap: 12px; overflow-y: auto; }
+    .crop-lb-info { font-family: var(--font-mono); font-size: 11px; }
+    .crop-lb-info .lb-label { color: var(--text-muted); font-size: 10px; margin-bottom: 3px; }
+    .crop-lb-info .lb-val { color: var(--accent); font-size: 13px; font-weight: 600; }
+    .crop-lb-divider { border: none; border-top: 1px solid var(--border); }
+    .crop-lb-hint { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); line-height: 1.6; }
+
+    /* ── Misc ── */
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+    .processing { animation: pulse 1s infinite; color: var(--accent2); }
+    .api-url-input { font-size: 11px; }
+    input[type="file"] { display: none; }
+
+    /* ── Thumbnail size toolbar ── */
+    .thumb-size-bar { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; background: var(--surface); }
+    .thumb-size-bar label { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; margin-bottom: 0; }
+    .thumb-size-bar input[type="range"] { flex: 1; }
+    .thumb-size-bar .thumb-cols-val { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 56px; text-align: right; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div>
+      <h1>Image Studio</h1>
+      <p data-i18n="subtitle">图像批量处理工作台</p>
+    </div>
+    <div class="lang-switcher">
+      <span class="lang-btn active" onclick="setLang('zh')">中</span>
+      <span class="lang-btn" onclick="setLang('en')">EN</span>
+      <span class="lang-btn" onclick="setLang('ja')">日</span>
+    </div>
+  </div>
+
+  <!-- 背景色 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="bg_title">背景填充颜色</div>
+    <div class="color-presets" id="colorPresets">
+      <div class="color-swatch transparent-swatch active" data-color="transparent" onclick="selectColor(this,'transparent')"></div>
+      <div class="color-swatch" style="background:#ffffff" data-color="#ffffff" onclick="selectColor(this,'#ffffff')"></div>
+      <div class="color-swatch" style="background:#000000" data-color="#000000" onclick="selectColor(this,'#000000')"></div>
+      <div class="color-swatch" style="background:#ff4444" data-color="#ff4444" onclick="selectColor(this,'#ff4444')"></div>
+      <div class="color-swatch" style="background:#4488ff" data-color="#4488ff" onclick="selectColor(this,'#4488ff')"></div>
+      <div class="color-swatch" style="background:#44bb66" data-color="#44bb66" onclick="selectColor(this,'#44bb66')"></div>
+      <div class="color-swatch" style="background:#ffcc00" data-color="#ffcc00" onclick="selectColor(this,'#ffcc00')"></div>
+      <div class="color-swatch" style="background:#cc44ff" data-color="#cc44ff" onclick="selectColor(this,'#cc44ff')"></div>
+    </div>
+    <div class="color-custom-row">
+      <input type="color" id="colorPicker" value="#ffffff">
+      <input type="text" class="color-hex-input" id="colorHex" placeholder="#rrggbb" maxlength="7">
+    </div>
+    <button class="btn btn-primary" onclick="applyBackground()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M8 5v6"/></svg>
+      <span data-i18n="apply_bg">应用背景色</span>
+    </button>
+  </div>
+
+  <!-- 比例填充 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="pad_title">比例填充</div>
+    <div class="ratio-grid" id="ratioGrid">
+      <div class="ratio-btn" data-ratio="1:1" onclick="selectRatio(this,'1:1')">1:1</div>
+      <div class="ratio-btn" data-ratio="4:3" onclick="selectRatio(this,'4:3')">4:3</div>
+      <div class="ratio-btn" data-ratio="3:4" onclick="selectRatio(this,'3:4')">3:4</div>
+      <div class="ratio-btn" data-ratio="16:9" onclick="selectRatio(this,'16:9')">16:9</div>
+      <div class="ratio-btn" data-ratio="9:16" onclick="selectRatio(this,'9:16')">9:16</div>
+      <div class="ratio-btn" data-ratio="3:2" onclick="selectRatio(this,'3:2')">3:2</div>
+      <div class="ratio-btn" data-ratio="2:3" onclick="selectRatio(this,'2:3')">2:3</div>
+      <div class="ratio-btn" data-ratio="5:4" onclick="selectRatio(this,'5:4')">5:4</div>
+      <div class="ratio-btn" data-ratio="none" onclick="selectRatio(this,'none')" data-i18n="no_pad">不填充</div>
+    </div>
+    <div class="row">
+      <div><label data-i18n="custom_w">自定义宽比</label><input type="number" id="customRatioW" placeholder="7" min="1"></div>
+      <div><label data-i18n="custom_h">自定义高比</label><input type="number" id="customRatioH" placeholder="5" min="1"></div>
+    </div>
+    <button class="btn btn-secondary" onclick="applyCustomRatio()"><span data-i18n="apply_ratio">应用自定义比例</span></button>
+  </div>
+
+  <!-- 缩放 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="scale_title">分辨率缩放</div>
+    <div class="toggle-row">
+      <span class="toggle-label" data-i18n="scale_prop">按比例缩放（锁定长宽比）</span>
+      <label class="toggle"><input type="checkbox" id="scaleProportional" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="row">
+      <div><label data-i18n="width">宽 (px)</label><input type="number" id="scaleW" min="1" oninput="onScaleWInput()"></div>
+      <div><label data-i18n="height">高 (px)</label><input type="number" id="scaleH" min="1" oninput="onScaleHInput()"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label" data-i18n="long_edge">按长边约束</span>
+      <label class="toggle"><input type="checkbox" id="scaleLongEdge" onchange="onLongEdgeToggle()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="form-group" id="longEdgeGroup" style="display:none">
+      <label data-i18n="long_edge_val">长边最大 (px)</label>
+      <input type="number" id="scaleLongEdgeVal" placeholder="1024" min="1">
+    </div>
+    <button class="btn btn-secondary" onclick="clearScale()"><span data-i18n="clear_scale">清除缩放</span></button>
+  </div>
+
+  <!-- 输出格式 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="format_title">输出格式与质量</div>
+    <div class="form-group">
+      <label data-i18n="format_label">格式</label>
+      <select id="outputFormat">
+        <option value="preserve" data-i18n="fmt_preserve">保留原格式</option>
+        <option value="jpeg">JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label data-i18n="quality_label">JPEG / WebP 质量 (1–100)</label>
+      <input type="number" id="qualitySetting" value="100" min="1" max="100">
+    </div>
+  </div>
+
+  <!-- 智能裁剪 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="crop_title">智能裁剪</div>
+    <div class="toggle-row">
+      <span class="toggle-label" data-i18n="crop_ratio_lock">按比例裁剪</span>
+      <label class="toggle"><input type="checkbox" id="cropRatioLock" onchange="onCropRatioLockChange()"><span class="toggle-slider"></span></label>
+    </div>
+    <div id="cropRatioInputs" style="display:none;margin-bottom:10px;">
+      <div class="row" style="margin-bottom:0">
+        <div><label data-i18n="crop_ratio_w">裁剪宽比</label><input type="number" id="cropRatioW" value="1" min="0.1" step="0.1" oninput="onCropRatioInput()"></div>
+        <div><label data-i18n="crop_ratio_h">裁剪高比</label><input type="number" id="cropRatioH" value="1" min="0.1" step="0.1" oninput="onCropRatioInput()"></div>
+      </div>
+      <div class="crop-ratio-presets">
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(1,1)">1:1</span>
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(4,3)">4:3</span>
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(3,4)">3:4</span>
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(16,9)">16:9</span>
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(9,16)">9:16</span>
+        <span class="crop-ratio-preset" onclick="setCropRatioPreset(3,2)">3:2</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label data-i18n="api_label">检测 API（可选）</label>
+      <input type="text" id="apiUrl" class="api-url-input" value="http://localhost:5050/api/detect/person_regions">
+    </div>
+    <div class="form-group">
+      <label data-i18n="smartcrop_size">Smartcrop 分析尺寸 (px)</label>
+      <input type="number" id="maxOutputDim" value="1024">
+    </div>
+    <button class="btn btn-secondary" id="prepareCropBtn" onclick="enterCropMode()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M1 5V2h3M11 2h3v3M1 11v3h3M11 14h3v-3"/></svg>
+      <span data-i18n="prepare_crop">准备裁剪</span>
+    </button>
+    <button class="btn btn-accent2" id="smartDetectBtn" onclick="runSmartDetect()" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg>
+      <span data-i18n="smart_detect">智能检测主体</span>
+    </button>
+    <button class="btn btn-primary" id="confirmCropBtn" onclick="confirmCropAll()" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l4 4 6-6"/></svg>
+      <span data-i18n="confirm_crop">确认裁剪</span>
+    </button>
+    <!-- ★ NEW: Clear Crop button — resets all confirmed crops back to original -->
+    <button class="btn btn-warning" id="clearCropBtn" onclick="clearCropAll()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      <span data-i18n="clear_crop">清除裁剪（恢复原图）</span>
+    </button>
+    <button class="btn btn-danger" id="cancelCropBtn" onclick="exitCropMode()" style="display:none">
+      <span data-i18n="cancel_crop">取消裁剪</span>
+    </button>
+  </div>
+
+  <!-- 批量操作 -->
+  <div class="panel">
+    <div class="panel-title" data-i18n="batch_title">批量操作</div>
+    <button class="btn btn-primary" onclick="processAndSaveAll(true)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 11v2h10v-2M8 2v8M5 7l3 3 3-3"/></svg>
+      <span data-i18n="save_zip">全部打包 ZIP</span>
+    </button>
+    <button class="btn btn-secondary" onclick="processAndSaveAll(false)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
+      <span data-i18n="save_individual">逐个保存</span>
+    </button>
+    <button class="btn btn-danger" onclick="removeAll()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+      <span data-i18n="remove_all">移除全部图片</span>
+    </button>
+  </div>
+
+  <div class="panel" style="border-bottom:none">
+    <div class="panel-title" data-i18n="log_title">操作日志</div>
+    <div class="log-box" id="logBox" data-i18n-content="log_init">等待操作…</div>
+  </div>
+</div>
+
+<!-- ══════════ MAIN ══════════ -->
+<div class="main-content">
+  <div class="crop-mode-banner" id="cropModeBanner" data-i18n="crop_banner">✂ 裁剪模式 — 点击图片卡片可放大调整，也可直接在缩略图上拖拽裁剪框</div>
+
+  <!-- ★ NEW: Thumbnail size control bar -->
+  <div class="thumb-size-bar">
+    <label data-i18n="thumb_size_label">缩略图大小</label>
+    <input type="range" id="thumbColsSlider" min="2" max="10" value="5" step="1" oninput="onThumbColsChange(this.value)">
+    <span class="thumb-cols-val" id="thumbColsVal" data-i18n-tpl="thumb_cols_tpl">每行 5 张</span>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-icon">⬆</div>
+    <p><strong data-i18n="drop_strong">拖拽图片到这里</strong>&nbsp;<span data-i18n="drop_hint">，或点击选择文件（支持多选）</span></p>
+    <input type="file" id="fileInput" multiple accept="image/*">
+  </div>
+  <div class="tiles-wrapper">
+    <div class="tiles-container" id="tilesContainer">
+      <div class="empty-state" id="emptyState" data-i18n="empty">暂无图片，请上传后开始处理</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ FULLSCREEN CROP LIGHTBOX ══════════ -->
+<div class="crop-lightbox" id="cropLightbox">
+  <div class="crop-lightbox-header">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="crop-lightbox-title" id="lbTitle"></span>
+      <span class="crop-lightbox-dims" id="lbDims"></span>
+    </div>
+    <div class="crop-lightbox-nav">
+      <button class="crop-nav-btn" id="lbPrev" onclick="lbNavigate(-1)">‹ <span data-i18n="prev">上一张</span></button>
+      <span class="crop-lightbox-counter" id="lbCounter"></span>
+      <button class="crop-nav-btn" id="lbNext" onclick="lbNavigate(1)"><span data-i18n="next">下一张</span> ›</button>
+      <button class="crop-lightbox-close" onclick="closeLightbox()">✕</button>
+    </div>
+  </div>
+  <div class="crop-lightbox-body">
+    <div class="crop-lightbox-canvas-area" id="lbCanvasArea">
+      <div class="crop-lb-img-wrap" id="lbImgWrap">
+        <img id="lbImg" alt="">
+        <div class="crop-lb-box" id="lbBox">
+          <div class="crop-lb-handle nw"></div><div class="crop-lb-handle n"></div><div class="crop-lb-handle ne"></div>
+          <div class="crop-lb-handle w"></div><div class="crop-lb-handle e"></div>
+          <div class="crop-lb-handle sw"></div><div class="crop-lb-handle s"></div><div class="crop-lb-handle se"></div>
+          <div class="crop-lb-corners"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="crop-lightbox-sidebar">
+      <div class="crop-lb-info">
+        <div class="lb-label" data-i18n="lb_file">文件名</div>
+        <div class="lb-val" id="lbFileName" style="font-size:11px;word-break:break-all"></div>
+      </div>
+      <div class="crop-lb-info">
+        <div class="lb-label" data-i18n="lb_orig">原始尺寸</div>
+        <div class="lb-val" id="lbOrigDims"></div>
+      </div>
+      <div class="crop-lb-info">
+        <div class="lb-label" data-i18n="lb_crop">裁剪区域</div>
+        <div class="lb-val" id="lbCropDims" style="color:var(--accent)"></div>
+      </div>
+      <hr class="crop-lb-divider">
+      <div class="crop-lb-hint" id="lbHint" data-i18n="lb_hint">
+        拖拽裁剪框移动位置<br>拖拽边角或边缘调整大小<br>Esc 关闭，← → 切换图片
+      </div>
+      <hr class="crop-lb-divider">
+      <button class="btn btn-secondary" onclick="lbResetCrop()" style="font-size:11px;padding:7px"><span data-i18n="lb_reset">重置为全图</span></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/smartcrop@2.0.5/smartcrop.min.js"></script>
+<script>
+/* ══════════════════════════════════
+   I18N
+══════════════════════════════════ */
+const I18N = {
+  zh: {
+    subtitle:'图像批量处理工作台', bg_title:'背景填充颜色', apply_bg:'应用背景色',
+    pad_title:'比例填充', no_pad:'不填充', custom_w:'自定义宽比', custom_h:'自定义高比', apply_ratio:'应用自定义比例',
+    scale_title:'分辨率缩放', scale_prop:'按比例缩放（锁定长宽比）', width:'宽 (px)', height:'高 (px)',
+    long_edge:'按长边约束', long_edge_val:'长边最大 (px)', clear_scale:'清除缩放',
+    format_title:'输出格式与质量', format_label:'格式', fmt_preserve:'保留原格式',
+    quality_label:'JPEG / WebP 质量 (1–100)',
+    crop_title:'智能裁剪', crop_ratio_lock:'按比例裁剪', crop_ratio_w:'裁剪宽比', crop_ratio_h:'裁剪高比',
+    api_label:'检测 API（可选）', smartcrop_size:'Smartcrop 分析尺寸 (px)',
+    prepare_crop:'准备裁剪', smart_detect:'智能检测主体', confirm_crop:'确认裁剪',
+    clear_crop:'清除裁剪（恢复原图）',
+    cancel_crop:'取消裁剪',
+    batch_title:'批量操作', save_zip:'全部打包 ZIP', save_individual:'逐个保存', remove_all:'移除全部图片',
+    log_title:'操作日志', log_init:'等待操作…',
+    crop_banner:'✂ 裁剪模式 — 点击图片卡片放大调整，或直接在缩略图拖拽裁剪框',
+    drop_strong:'拖拽图片到这里', drop_hint:'，或点击选择文件（支持多选）',
+    empty:'暂无图片，请上传后开始处理',
+    prev:'上一张', next:'下一张',
+    lb_file:'文件名', lb_orig:'原始尺寸', lb_crop:'裁剪区域',
+    lb_hint:'拖拽裁剪框移动位置\n拖拽边角或边缘调整大小\nEsc 关闭，← → 切换图片',
+    lb_reset:'重置为全图',
+    thumb_size_label:'缩略图大小',
+    log_loaded:'已加载', log_skip:'跳过非图片文件', log_fail:'加载失败',
+    log_removed:'已移除图片', log_remove_all:'已移除全部图片',
+    log_no_img:'没有图片可处理', log_ratio_invalid:'请输入有效的自定义比例',
+    log_ratio_set:'已选择自定义比例',
+    log_applied:'已对 %n 张图应用设置（背景: %c，比例: %r）',
+    log_crop_enter:'裁剪模式已启动，点击图片放大调整，或直接拖拽缩略图裁剪框',
+    log_crop_exit:'已退出裁剪模式',
+    log_crop_confirm:'已确认裁剪区域（%n 张）',
+    log_crop_cleared:'已清除全部裁剪，恢复原图（%n 张）',
+    log_detect_start:'开始智能检测…', log_detect_done:'智能检测完成，可手动调整后确认裁剪',
+    log_detect_err:'检测出错', log_processing:'开始处理 %n 张图片… %m',
+    log_zip_gen:'正在生成ZIP…', log_zip_done:'ZIP已下载，共 %n 张',
+    log_saved_all:'已逐个保存 %n 张',
+    log_saved_single:'已保存', log_scale_clear:'缩放已清除，将保留原始尺寸',
+    detecting:'检测中…', detect_done:'检测完成', detect_fail:'检测失败',
+    zip_mode:'打包ZIP', individual_mode:'逐个保存',
+  },
+  en: {
+    subtitle:'Batch Image Processing', bg_title:'Background Color', apply_bg:'Apply Background',
+    pad_title:'Aspect Padding', no_pad:'No Pad', custom_w:'Custom W Ratio', custom_h:'Custom H Ratio', apply_ratio:'Apply Custom Ratio',
+    scale_title:'Resolution Scale', scale_prop:'Proportional (lock aspect)', width:'Width (px)', height:'Height (px)',
+    long_edge:'Constrain Long Edge', long_edge_val:'Long Edge Max (px)', clear_scale:'Clear Scale',
+    format_title:'Output Format & Quality', format_label:'Format', fmt_preserve:'Keep Original',
+    quality_label:'JPEG / WebP Quality (1–100)',
+    crop_title:'Smart Crop', crop_ratio_lock:'Locked Ratio Crop', crop_ratio_w:'Crop W Ratio', crop_ratio_h:'Crop H Ratio',
+    api_label:'Detection API (optional)', smartcrop_size:'Smartcrop Analysis Size (px)',
+    prepare_crop:'Prepare Crop', smart_detect:'Auto-Detect Subject', confirm_crop:'Confirm Crop',
+    clear_crop:'Clear Crop (Restore Original)',
+    cancel_crop:'Cancel Crop',
+    batch_title:'Batch Actions', save_zip:'Save All as ZIP', save_individual:'Save Individually', remove_all:'Remove All',
+    log_title:'Log', log_init:'Waiting…',
+    crop_banner:'✂ Crop Mode — click a tile to open fullscreen editor, or drag crop boxes directly on thumbnails',
+    drop_strong:'Drop images here', drop_hint:' or click to select files',
+    empty:'No images yet. Upload to begin.',
+    prev:'Prev', next:'Next',
+    lb_file:'Filename', lb_orig:'Original Size', lb_crop:'Crop Region',
+    lb_hint:'Drag box to move\nDrag handles to resize\nEsc to close, ← → to navigate',
+    lb_reset:'Reset to Full Image',
+    thumb_size_label:'Thumbnail Size',
+    log_loaded:'Loaded', log_skip:'Skipped non-image', log_fail:'Load failed',
+    log_removed:'Image removed', log_remove_all:'All images removed',
+    log_no_img:'No images to process', log_ratio_invalid:'Enter a valid custom ratio',
+    log_ratio_set:'Custom ratio set',
+    log_applied:'Applied to %n images (bg: %c, ratio: %r)',
+    log_crop_enter:'Crop mode active. Click tile to open fullscreen editor.',
+    log_crop_exit:'Exited crop mode',
+    log_crop_confirm:'Crop confirmed for %n image(s)',
+    log_crop_cleared:'Crop cleared, restored original for %n image(s)',
+    log_detect_start:'Starting smart detection…', log_detect_done:'Detection complete. Adjust then confirm.',
+    log_detect_err:'Detection error', log_processing:'Processing %n images… %m',
+    log_zip_gen:'Generating ZIP…', log_zip_done:'ZIP downloaded (%n files)',
+    log_saved_all:'Saved %n files individually',
+    log_saved_single:'Saved', log_scale_clear:'Scale cleared, original size retained',
+    detecting:'Detecting…', detect_done:'Detected', detect_fail:'Failed',
+    zip_mode:'as ZIP', individual_mode:'individually',
+  },
+  ja: {
+    subtitle:'画像一括処理ツール', bg_title:'背景色', apply_bg:'背景色を適用',
+    pad_title:'アスペクト比パディング', no_pad:'パディングなし', custom_w:'カスタム幅比', custom_h:'カスタム高比', apply_ratio:'カスタム比率を適用',
+    scale_title:'解像度スケール', scale_prop:'比率維持（アスペクト固定）', width:'幅 (px)', height:'高さ (px)',
+    long_edge:'長辺制約', long_edge_val:'長辺最大 (px)', clear_scale:'スケールをリセット',
+    format_title:'出力形式と品質', format_label:'形式', fmt_preserve:'元の形式を維持',
+    quality_label:'JPEG / WebP 品質 (1–100)',
+    crop_title:'スマートクロップ', crop_ratio_lock:'比率固定クロップ', crop_ratio_w:'クロップ幅比', crop_ratio_h:'クロップ高比',
+    api_label:'検出 API（任意）', smartcrop_size:'Smartcrop 解析サイズ (px)',
+    prepare_crop:'クロップ準備', smart_detect:'被写体を自動検出', confirm_crop:'クロップを確定',
+    clear_crop:'クロップをリセット（元に戻す）',
+    cancel_crop:'クロップをキャンセル',
+    batch_title:'一括操作', save_zip:'すべて ZIP で保存', save_individual:'個別に保存', remove_all:'すべて削除',
+    log_title:'ログ', log_init:'待機中…',
+    crop_banner:'✂ クロップモード — タイルをクリックして拡大表示、またはサムネイルのボックスを直接ドラッグ',
+    drop_strong:'ここに画像をドロップ', drop_hint:'またはクリックして選択',
+    empty:'画像がありません。アップロードしてください。',
+    prev:'前へ', next:'次へ',
+    lb_file:'ファイル名', lb_orig:'元のサイズ', lb_crop:'クロップ領域',
+    lb_hint:'ボックスをドラッグして移動\nハンドルをドラッグしてリサイズ\nEsc で閉じる、← → で切替',
+    lb_reset:'全体にリセット',
+    thumb_size_label:'サムネイルサイズ',
+    log_loaded:'読み込み完了', log_skip:'非画像ファイルをスキップ', log_fail:'読み込み失敗',
+    log_removed:'画像を削除', log_remove_all:'すべての画像を削除',
+    log_no_img:'処理する画像がありません', log_ratio_invalid:'有効なカスタム比率を入力してください',
+    log_ratio_set:'カスタム比率が設定されました',
+    log_applied:'%n 枚の画像に適用（背景: %c、比率: %r）',
+    log_crop_enter:'クロップモード開始。タイルをクリックして拡大表示。',
+    log_crop_exit:'クロップモード終了',
+    log_crop_confirm:'%n 枚のクロップが確定されました',
+    log_crop_cleared:'%n 枚のクロップをリセットしました',
+    log_detect_start:'スマート検出を開始…', log_detect_done:'検出完了。調整後に確定してください。',
+    log_detect_err:'検出エラー', log_processing:'%n 枚を処理中… %m',
+    log_zip_gen:'ZIP を生成中…', log_zip_done:'ZIP をダウンロード（%n ファイル）',
+    log_saved_all:'%n ファイルを個別に保存',
+    log_saved_single:'保存完了', log_scale_clear:'スケールをリセットしました',
+    detecting:'検出中…', detect_done:'検出完了', detect_fail:'検出失敗',
+    zip_mode:'ZIP形式', individual_mode:'個別保存',
+  }
+};
+
+let currentLang = 'zh';
+function t(key, vars) {
+  let s = (I18N[currentLang] || I18N.zh)[key] || key;
+  if (vars) Object.entries(vars).forEach(([k,v]) => s = s.replace('%'+k, v));
+  return s;
+}
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent === ({zh:'中',en:'EN',ja:'日'}[lang])));
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-content]').forEach(el => { el.textContent = t(el.dataset.i18nContent); });
+  // Rebuild select options
+  document.querySelector('#outputFormat option[value="preserve"]').textContent = t('fmt_preserve');
+  // Update thumb label
+  updateThumbColsLabel();
+}
+
+/* ══════════════════════════════════
+   STATE
+══════════════════════════════════ */
+let imageFiles = [];
+let uidCounter = 0;
+let selectedColor = 'transparent';
+let selectedRatio = 'none';
+let scaleRefAspect = null;
+let cropMode = false;
+let cropRatioLocked = false;
+let cropRatioW = 1, cropRatioH = 1;
+
+/* ══════════════════════════════════
+   THUMBNAIL SIZE SLIDER  ★ NEW
+══════════════════════════════════ */
+let thumbCols = 5; // default number of columns
+
+function onThumbColsChange(val) {
+  thumbCols = parseInt(val);
+  applyThumbSize();
+  updateThumbColsLabel();
+}
+
+function updateThumbColsLabel() {
+  const el = document.getElementById('thumbColsVal');
+  if (!el) return;
+  const templates = { zh: `每行 ${thumbCols} 张`, en: `${thumbCols} per row`, ja: `1行に${thumbCols}枚` };
+  el.textContent = templates[currentLang] || templates.zh;
+}
+
+function applyThumbSize() {
+  // Compute tile size: fill available width divided by columns, minus gaps
+  const wrapper = document.querySelector('.tiles-wrapper');
+  if (!wrapper) return;
+  const availW = wrapper.clientWidth - 32; // 16px padding each side
+  const gap = 12;
+  const size = Math.floor((availW - gap * (thumbCols - 1)) / thumbCols);
+  const clampedSize = Math.max(100, Math.min(size, 600));
+  document.documentElement.style.setProperty('--tile-size', clampedSize + 'px');
+  // Also update crop boxes if in crop mode
+  if (cropMode) {
+    requestAnimationFrame(() => imageFiles.forEach(obj => updateTileCropBoxDisplay(obj)));
+  }
+}
+
+// Init on load and on resize
+window.addEventListener('resize', () => {
+  applyThumbSize();
+  if (cropMode) imageFiles.forEach(obj => updateTileCropBoxDisplay(obj));
+  if (lbOpen) layoutLightbox();
+});
+
+/* ══════════════════════════════════
+   LOG
+══════════════════════════════════ */
+function log(msg) {
+  const box = document.getElementById('logBox');
+  const ts = new Date().toLocaleTimeString();
+  box.innerHTML = `<span style="color:var(--accent2)">[${ts}]</span> ${msg}<br>` + box.innerHTML;
+}
+
+/* ══════════════════════════════════
+   COLOR
+══════════════════════════════════ */
+function selectColor(el, color) {
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  selectedColor = color;
+  if (color !== 'transparent') {
+    document.getElementById('colorPicker').value = color;
+    document.getElementById('colorHex').value = color;
+  } else { document.getElementById('colorHex').value = ''; }
+}
+document.getElementById('colorPicker').addEventListener('input', function() {
+  selectedColor = this.value;
+  document.getElementById('colorHex').value = this.value;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+});
+document.getElementById('colorHex').addEventListener('change', function() {
+  let v = this.value.trim();
+  if (!v.startsWith('#')) v = '#'+v;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) { selectedColor = v; document.getElementById('colorPicker').value = v; document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active')); }
+});
+
+/* ══════════════════════════════════
+   RATIO
+══════════════════════════════════ */
+function selectRatio(el, ratio) {
+  document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  selectedRatio = ratio;
+}
+function applyCustomRatio() {
+  const w = parseFloat(document.getElementById('customRatioW').value);
+  const h = parseFloat(document.getElementById('customRatioH').value);
+  if (!w||!h||w<=0||h<=0) { log(t('log_ratio_invalid')); return; }
+  selectedRatio = `${w}:${h}`;
+  document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+  log(`${t('log_ratio_set')}: ${selectedRatio}`);
+}
+
+/* ══════════════════════════════════
+   SCALE
+══════════════════════════════════ */
+function onLongEdgeToggle() {
+  const on = document.getElementById('scaleLongEdge').checked;
+  document.getElementById('longEdgeGroup').style.display = on ? 'block' : 'none';
+  if (on) { document.getElementById('scaleW').value = ''; document.getElementById('scaleH').value = ''; }
+}
+function onScaleWInput() {
+  if (!document.getElementById('scaleProportional').checked || !scaleRefAspect) return;
+  const w = parseFloat(document.getElementById('scaleW').value);
+  if (w) document.getElementById('scaleH').value = Math.round(w / scaleRefAspect);
+}
+function onScaleHInput() {
+  if (!document.getElementById('scaleProportional').checked || !scaleRefAspect) return;
+  const h = parseFloat(document.getElementById('scaleH').value);
+  if (h) document.getElementById('scaleW').value = Math.round(h * scaleRefAspect);
+}
+function clearScale() {
+  document.getElementById('scaleW').value = '';
+  document.getElementById('scaleH').value = '';
+  document.getElementById('scaleLongEdgeVal').value = '';
+  document.getElementById('scaleLongEdge').checked = false;
+  document.getElementById('longEdgeGroup').style.display = 'none';
+  log(t('log_scale_clear'));
+}
+
+/* ══════════════════════════════════
+   FILE DROP / LOAD
+══════════════════════════════════ */
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+['dragenter','dragover','dragleave','drop'].forEach(ev => {
+  dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
+  document.body.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
+});
+['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('dragover')));
+['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover')));
+dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+
+async function handleFiles(files) {
+  if (!files||!files.length) return;
+  for (const f of Array.from(files)) {
+    if (!f.type.startsWith('image/')) { log(`${t('log_skip')}: ${f.name}`); continue; }
+    await addFile(f);
+  }
+  fileInput.value = '';
+  updateEmpty();
+  // Apply thumb size after adding tiles
+  requestAnimationFrame(applyThumbSize);
+}
+
+function addFile(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const obj = { id:`img-${uidCounter++}`, file, name:file.name, img, origW:img.naturalWidth, origH:img.naturalHeight, smartcropResult:null, cropBox:null, tileElement:null, resultCanvas:null };
+        imageFiles.push(obj);
+        if (!scaleRefAspect) scaleRefAspect = img.naturalWidth / img.naturalHeight;
+        createTile(obj);
+        log(`${t('log_loaded')}: ${file.name} (${img.naturalWidth}×${img.naturalHeight})`);
+        resolve();
+      };
+      img.onerror = () => { log(`${t('log_fail')}: ${file.name}`); resolve(); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ══════════════════════════════════
+   TILE CREATION
+══════════════════════════════════ */
+function createTile(obj) {
+  const tile = document.createElement('div');
+  tile.className = 'tile'; tile.id = obj.id;
+  obj.tileElement = tile;
+
+  const holder = document.createElement('div'); holder.className = 'tile-img-holder';
+  const preview = document.createElement('img'); preview.src = obj.img.src; holder.appendChild(preview);
+
+  const result = document.createElement('div'); result.className = 'tile-result';
+  const rc = document.createElement('canvas'); result.appendChild(rc);
+  holder.appendChild(result); obj.resultCanvas = rc; obj.resultLayer = result;
+
+  // Expand button (crop mode only)
+  const expandBtn = document.createElement('div'); expandBtn.className = 'tile-expand'; expandBtn.innerHTML = '⤢';
+  expandBtn.title = 'Open fullscreen editor';
+  expandBtn.onclick = e => { e.stopPropagation(); openLightbox(obj); };
+  holder.appendChild(expandBtn);
+
+  const saveBtn = document.createElement('div'); saveBtn.className = 'tile-save'; saveBtn.innerHTML = '↓';
+  saveBtn.onclick = e => { e.stopPropagation(); saveSingle(obj); }; holder.appendChild(saveBtn);
+
+  const delBtn = document.createElement('div'); delBtn.className = 'tile-del'; delBtn.innerHTML = '×';
+  delBtn.onclick = e => { e.stopPropagation(); removeTile(obj.id); }; holder.appendChild(delBtn);
+
+  const status = document.createElement('div'); status.className = 'tile-status';
+  status.textContent = `${obj.origW}×${obj.origH}`; obj.statusEl = status; holder.appendChild(status);
+
+  const info = document.createElement('div'); info.className = 'tile-info';
+  const nameEl = document.createElement('div'); nameEl.className = 'tile-name'; nameEl.textContent = obj.name; nameEl.title = obj.name;
+  const dimsEl = document.createElement('div'); dimsEl.className = 'tile-dims'; dimsEl.textContent = `${obj.origW} × ${obj.origH}`; obj.dimsEl = dimsEl;
+  info.appendChild(nameEl); info.appendChild(dimsEl);
+
+  tile.appendChild(holder); tile.appendChild(info);
+  // Click tile to expand in crop mode
+  tile.addEventListener('click', () => { if (cropMode) openLightbox(obj); });
+  document.getElementById('tilesContainer').appendChild(tile);
+}
+
+function removeTile(id) {
+  imageFiles = imageFiles.filter(f => f.id !== id);
+  const el = document.getElementById(id); if (el) el.remove();
+  updateEmpty(); log(t('log_removed'));
+}
+function removeAll() {
+  imageFiles = []; document.getElementById('tilesContainer').innerHTML = '';
+  updateEmpty(); scaleRefAspect = null; log(t('log_remove_all'));
+}
+function updateEmpty() {
+  const c = document.getElementById('tilesContainer');
+  let e = document.getElementById('emptyState');
+  if (imageFiles.length === 0) {
+    if (!e) { e = document.createElement('div'); e.id = 'emptyState'; e.className = 'empty-state'; e.textContent = t('empty'); c.appendChild(e); }
+  } else { if (e) e.remove(); }
+}
+
+/* ══════════════════════════════════
+   CORE RENDERING
+══════════════════════════════════ */
+function computeOutputDims(obj) {
+  let srcX=0, srcY=0, srcW=obj.origW, srcH=obj.origH;
+  if (obj.smartcropResult) { const c=obj.smartcropResult; srcX=c.x; srcY=c.y; srcW=c.width||c.w; srcH=c.height||c.h; }
+  let padW=srcW, padH=srcH;
+  if (selectedRatio !== 'none') {
+    const [rw,rh] = selectedRatio.split(':').map(parseFloat);
+    const ta=rw/rh, ia=srcW/srcH;
+    if (ia<ta) { padW=Math.round(srcH*ta); padH=srcH; }
+    else if (ia>ta) { padH=Math.round(srcW/ta); padW=srcW; }
+  }
+  let outW=padW, outH=padH;
+  const le=document.getElementById('scaleLongEdge').checked, lev=parseFloat(document.getElementById('scaleLongEdgeVal').value);
+  const sw=parseFloat(document.getElementById('scaleW').value), sh=parseFloat(document.getElementById('scaleH').value);
+  const prop=document.getElementById('scaleProportional').checked;
+  if (le&&lev>0) { const a=padW/padH; if (padW>=padH){outW=lev;outH=Math.round(lev/a);}else{outH=lev;outW=Math.round(lev*a);} }
+  else if (sw>0&&sh>0) { outW=sw; outH=sh; }
+  else if (sw>0) { outW=sw; outH=prop?Math.round(sw/(padW/padH)):padH; }
+  else if (sh>0) { outH=sh; outW=prop?Math.round(sh*(padW/padH)):padW; }
+  return { srcX, srcY, srcW, srcH, padW, padH, outW:Math.max(1,Math.round(outW)), outH:Math.max(1,Math.round(outH)) };
+}
+
+function renderToCanvas(obj) {
+  const {srcX,srcY,srcW,srcH,padW,padH,outW,outH} = computeOutputDims(obj);
+  const canvas=document.createElement('canvas'); canvas.width=outW; canvas.height=outH;
+  const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  if (selectedColor!=='transparent') { ctx.fillStyle=selectedColor; ctx.fillRect(0,0,outW,outH); }
+  const sx=outW/padW, sy=outH/padH;
+  const actualW = obj.smartcropResult ? srcW : obj.origW;
+  const actualH = obj.smartcropResult ? srcH : obj.origH;
+  const ix=Math.round((padW-actualW)/2*sx), iy=Math.round((padH-actualH)/2*sy);
+  const dw=Math.round(actualW*sx), dh=Math.round(actualH*sy);
+  ctx.drawImage(obj.img, obj.smartcropResult?srcX:0, obj.smartcropResult?srcY:0, actualW, actualH, ix, iy, dw, dh);
+  return canvas;
+}
+
+/* ══════════════════════════════════
+   APPLY BACKGROUND
+══════════════════════════════════ */
+function applyBackground() {
+  if (!imageFiles.length) { log(t('log_no_img')); return; }
+  imageFiles.forEach(obj => {
+    const canvas=renderToCanvas(obj);
+    const rc=obj.resultCanvas; rc.width=canvas.width; rc.height=canvas.height;
+    rc.getContext('2d').drawImage(canvas,0,0);
+    obj.resultLayer.classList.add('visible');
+    obj.statusEl.textContent=`${canvas.width}×${canvas.height}`; obj.statusEl.classList.add('ok');
+    if (obj.dimsEl) obj.dimsEl.textContent=`${canvas.width} × ${canvas.height}`;
+  });
+  log(t('log_applied',{n:imageFiles.length,c:selectedColor,r:selectedRatio}));
+}
+
+/* ══════════════════════════════════
+   CROP MODE
+══════════════════════════════════ */
+function onCropRatioLockChange() {
+  cropRatioLocked = document.getElementById('cropRatioLock').checked;
+  document.getElementById('cropRatioInputs').style.display = cropRatioLocked ? 'block' : 'none';
+  if (cropMode) imageFiles.forEach(obj => { if (obj.cropBox&&cropRatioLocked) { obj.cropBox=clampCropBox(obj,{...obj.cropBox,h:Math.round(obj.cropBox.w*cropRatioH/cropRatioW)}); updateTileCropBoxDisplay(obj); } });
+}
+function onCropRatioInput() {
+  cropRatioW=parseFloat(document.getElementById('cropRatioW').value)||1;
+  cropRatioH=parseFloat(document.getElementById('cropRatioH').value)||1;
+  if (cropMode&&cropRatioLocked) imageFiles.forEach(obj => { if (obj.cropBox) { obj.cropBox=clampCropBox(obj,{...obj.cropBox,h:Math.round(obj.cropBox.w*cropRatioH/cropRatioW)}); updateTileCropBoxDisplay(obj); } });
+  if (lbCurrentObj) updateLbBoxDisplay();
+}
+function setCropRatioPreset(w,h) {
+  cropRatioW=w; cropRatioH=h;
+  document.getElementById('cropRatioW').value=w; document.getElementById('cropRatioH').value=h;
+  onCropRatioInput();
+}
+
+function enterCropMode() {
+  if (!imageFiles.length) { log(t('log_no_img')); return; }
+  cropMode=true; document.body.classList.add('crop-mode');
+  document.getElementById('prepareCropBtn').style.display='none';
+  document.getElementById('smartDetectBtn').style.display='';
+  document.getElementById('confirmCropBtn').style.display='';
+  document.getElementById('cancelCropBtn').style.display='';
+  document.getElementById('clearCropBtn').style.display='none'; // hide clear crop while in crop mode
+  imageFiles.forEach(obj => {
+    if (!obj.cropBox) {
+      if (obj.smartcropResult) obj.cropBox={x:obj.smartcropResult.x,y:obj.smartcropResult.y,w:obj.smartcropResult.width,h:obj.smartcropResult.height};
+      else { const m=0.05; obj.cropBox={x:Math.round(obj.origW*m),y:Math.round(obj.origH*m),w:Math.round(obj.origW*(1-m*2)),h:Math.round(obj.origH*(1-m*2))}; }
+      if (cropRatioLocked) obj.cropBox=clampCropBox(obj,{...obj.cropBox,h:Math.round(obj.cropBox.w*cropRatioH/cropRatioW)});
+    }
+    attachTileCropUI(obj);
+  });
+  log(t('log_crop_enter'));
+}
+
+function exitCropMode() {
+  cropMode=false; document.body.classList.remove('crop-mode');
+  document.getElementById('prepareCropBtn').style.display='';
+  document.getElementById('smartDetectBtn').style.display='none';
+  document.getElementById('confirmCropBtn').style.display='none';
+  document.getElementById('cancelCropBtn').style.display='none';
+  document.getElementById('clearCropBtn').style.display=''; // show clear crop button after exiting
+  imageFiles.forEach(obj => detachTileCropUI(obj));
+  if (lbOpen) closeLightbox();
+  log(t('log_crop_exit'));
+}
+
+function confirmCropAll() {
+  imageFiles.forEach(obj => {
+    if (obj.cropBox) {
+      obj.smartcropResult={x:Math.round(obj.cropBox.x),y:Math.round(obj.cropBox.y),width:Math.round(obj.cropBox.w),height:Math.round(obj.cropBox.h)};
+      obj.statusEl.textContent=`✓ ${obj.smartcropResult.width}×${obj.smartcropResult.height}`; obj.statusEl.className='tile-status ok';
+    }
+  });
+  exitCropMode();
+  log(t('log_crop_confirm',{n:imageFiles.length}));
+}
+
+/* ★ NEW: Clear all confirmed crops, restore original image state */
+function clearCropAll() {
+  if (!imageFiles.length) { log(t('log_no_img')); return; }
+  let count = 0;
+  imageFiles.forEach(obj => {
+    if (obj.smartcropResult || obj.cropBox) {
+      obj.smartcropResult = null;
+      obj.cropBox = null;
+      // Reset result canvas / preview overlay
+      obj.resultLayer.classList.remove('visible');
+      // Reset status label to original dimensions
+      obj.statusEl.textContent = `${obj.origW}×${obj.origH}`;
+      obj.statusEl.className = 'tile-status';
+      if (obj.dimsEl) obj.dimsEl.textContent = `${obj.origW} × ${obj.origH}`;
+      count++;
+    }
+  });
+  log(t('log_crop_cleared', { n: count }));
+}
+
+/* ── Crop geometry helpers ── */
+function clampCropBox(obj,box) {
+  let {x,y,w,h}=box;
+  w=Math.max(10,Math.min(w,obj.origW)); h=Math.max(10,Math.min(h,obj.origH));
+  if (cropRatioLocked&&cropRatioW>0&&cropRatioH>0) {
+    h=Math.round(w*cropRatioH/cropRatioW); h=Math.max(10,Math.min(h,obj.origH));
+    w=Math.round(h*cropRatioW/cropRatioH); w=Math.max(10,Math.min(w,obj.origW));
+  }
+  x=Math.max(0,Math.min(x,obj.origW-w)); y=Math.max(0,Math.min(y,obj.origH-h));
+  return {x,y,w,h};
+}
+
+function getHolder(obj) { const t=document.getElementById(obj.id); return t?t.querySelector('.tile-img-holder'):null; }
+
+function getImgDisplayRect(obj,holderEl) {
+  const hw=holderEl.clientWidth||holderEl.offsetWidth, hh=holderEl.clientHeight||holderEl.offsetHeight;
+  const ia=obj.origW/obj.origH, ha=hw/hh;
+  let dw,dh,dx,dy;
+  if (ia>ha) { dw=hw; dh=hw/ia; dx=0; dy=(hh-dh)/2; }
+  else { dh=hh; dw=hh*ia; dx=(hw-dw)/2; dy=0; }
+  return {dw,dh,dx,dy};
+}
+
+/* ── Tile-level crop UI ── */
+function attachTileCropUI(obj) {
+  const holder=getHolder(obj); if (!holder) return;
+  if (obj.resultLayer) obj.resultLayer.classList.remove('visible');
+  const ui=document.createElement('div'); ui.className='tile-crop-ui'; ui.style.pointerEvents='none';
+  const box=document.createElement('div'); box.className='tile-crop-box';
+  ['nw','n','ne','w','e','sw','s','se'].forEach(d => { const h=document.createElement('div'); h.className=`tile-crop-handle ${d}`; box.appendChild(h); makeTileHandleResizable(obj,h,d,holder); });
+  const info=document.createElement('div'); info.className='tile-crop-info'; box.appendChild(info);
+  ui.appendChild(box); holder.appendChild(ui);
+  obj._tileUI=ui; obj._tileBox=box; obj._tileInfo=info;
+  makeTileBoxDraggable(obj,box,holder);
+  updateTileCropBoxDisplay(obj);
+}
+
+function detachTileCropUI(obj) { if (obj._tileUI) { obj._tileUI.remove(); obj._tileUI=obj._tileBox=obj._tileInfo=null; } }
+
+function updateTileCropBoxDisplay(obj) {
+  if (!obj._tileBox) return;
+  const holder=getHolder(obj); if (!holder) return;
+  const {dw,dh,dx,dy}=getImgDisplayRect(obj,holder);
+  const sx=dw/obj.origW, sy=dh/obj.origH;
+  const cb=obj.cropBox;
+  obj._tileBox.style.left=(dx+cb.x*sx)+'px'; obj._tileBox.style.top=(dy+cb.y*sy)+'px';
+  obj._tileBox.style.width=(cb.w*sx)+'px'; obj._tileBox.style.height=(cb.h*sy)+'px';
+  if (obj._tileInfo) obj._tileInfo.textContent=`${Math.round(cb.w)}×${Math.round(cb.h)}`;
+}
+
+function makeTileBoxDraggable(obj,boxEl,holder) {
+  boxEl.addEventListener('mousedown', e => {
+    if (e.target!==boxEl&&!e.target.classList.contains('tile-crop-info')) return;
+    e.preventDefault(); e.stopPropagation();
+    const {dw,dh}=getImgDisplayRect(obj,holder);
+    const sx=obj.origW/dw, sy=obj.origH/dh;
+    const sx0=e.clientX, sy0=e.clientY, cb0={...obj.cropBox};
+    const onMove=e => { obj.cropBox=clampCropBox(obj,{x:cb0.x+(e.clientX-sx0)*sx,y:cb0.y+(e.clientY-sy0)*sy,w:cb0.w,h:cb0.h}); updateTileCropBoxDisplay(obj); syncLightbox(obj); };
+    const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+    document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+  });
+}
+
+function makeTileHandleResizable(obj,handleEl,dir,holder) {
+  handleEl.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    const {dw,dh}=getImgDisplayRect(obj,holder);
+    const sx=obj.origW/dw, sy=obj.origH/dh;
+    const mx0=e.clientX, my0=e.clientY, cb0={...obj.cropBox};
+    const onMove=e => {
+      const dx=(e.clientX-mx0)*sx, dy=(e.clientY-my0)*sy;
+      let {x,y,w,h}=cb0;
+      if(dir.includes('e'))w+=dx; if(dir.includes('s'))h+=dy;
+      if(dir.includes('w')){x+=dx;w-=dx;} if(dir.includes('n')){y+=dy;h-=dy;}
+      w=Math.max(10,w); h=Math.max(10,h);
+      if(cropRatioLocked&&cropRatioW>0&&cropRatioH>0){
+        if(dir.includes('n')||dir.includes('s')){w=Math.round(h*cropRatioW/cropRatioH);if(dir.includes('w'))x=cb0.x+cb0.w-w;}
+        else{h=Math.round(w*cropRatioH/cropRatioW);if(dir.includes('n'))y=cb0.y+cb0.h-h;}
+      }
+      obj.cropBox=clampCropBox(obj,{x,y,w,h}); updateTileCropBoxDisplay(obj); syncLightbox(obj);
+    };
+    const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+    document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+  });
+}
+
+/* ══════════════════════════════════
+   FULLSCREEN LIGHTBOX
+══════════════════════════════════ */
+let lbOpen=false, lbCurrentObj=null, lbImgNaturalW=0, lbImgNaturalH=0;
+
+function openLightbox(obj) {
+  lbCurrentObj=obj; lbOpen=true;
+  const lb=document.getElementById('cropLightbox'); lb.classList.add('open');
+  const img=document.getElementById('lbImg'); img.src=obj.img.src;
+  img.onload=()=>{
+    lbImgNaturalW=img.naturalWidth; lbImgNaturalH=img.naturalHeight;
+    layoutLightbox();
+  };
+  if (img.complete&&img.naturalWidth) { lbImgNaturalW=img.naturalWidth; lbImgNaturalH=img.naturalHeight; layoutLightbox(); }
+  updateLbHeader();
+  document.getElementById('lbFileName').textContent=obj.name;
+  document.getElementById('lbOrigDims').textContent=`${obj.origW} × ${obj.origH}`;
+  updateLbNavBtns();
+}
+
+function closeLightbox() {
+  lbOpen=false; lbCurrentObj=null;
+  document.getElementById('cropLightbox').classList.remove('open');
+}
+
+function lbNavigate(dir) {
+  const idx=imageFiles.indexOf(lbCurrentObj);
+  const next=imageFiles[idx+dir];
+  if (next) openLightbox(next);
+}
+
+function updateLbNavBtns() {
+  const idx=imageFiles.indexOf(lbCurrentObj);
+  document.getElementById('lbPrev').disabled=idx<=0;
+  document.getElementById('lbNext').disabled=idx>=imageFiles.length-1;
+  document.getElementById('lbCounter').textContent=`${idx+1} / ${imageFiles.length}`;
+}
+
+function updateLbHeader() {
+  if (!lbCurrentObj) return;
+  document.getElementById('lbTitle').textContent=lbCurrentObj.name;
+  const cb=lbCurrentObj.cropBox;
+  if (cb) { document.getElementById('lbDims').textContent=`${Math.round(cb.w)} × ${Math.round(cb.h)}`; document.getElementById('lbCropDims').textContent=`${Math.round(cb.w)} × ${Math.round(cb.h)}`; }
+}
+
+function layoutLightbox() {
+  if (!lbCurrentObj) return;
+  const area=document.getElementById('lbCanvasArea');
+  const wrap=document.getElementById('lbImgWrap');
+  const img=document.getElementById('lbImg');
+  const areaW=area.clientWidth-32, areaH=area.clientHeight-32;
+  const ia=lbImgNaturalW/lbImgNaturalH, aa=areaW/areaH;
+  let dw,dh;
+  if (ia>aa) { dw=areaW; dh=Math.round(areaW/ia); }
+  else { dh=areaH; dw=Math.round(areaH*ia); }
+  img.style.width=dw+'px'; img.style.height=dh+'px';
+  wrap.style.width=dw+'px'; wrap.style.height=dh+'px';
+  // Init cropBox if needed
+  if (!lbCurrentObj.cropBox) {
+    const m=0.05;
+    lbCurrentObj.cropBox={x:Math.round(lbCurrentObj.origW*m),y:Math.round(lbCurrentObj.origH*m),w:Math.round(lbCurrentObj.origW*(1-m*2)),h:Math.round(lbCurrentObj.origH*(1-m*2))};
+    if (cropRatioLocked) lbCurrentObj.cropBox=clampCropBox(lbCurrentObj,{...lbCurrentObj.cropBox,h:Math.round(lbCurrentObj.cropBox.w*cropRatioH/cropRatioW)});
+  }
+  updateLbBoxDisplay();
+}
+
+function updateLbBoxDisplay() {
+  const obj=lbCurrentObj; if (!obj||!obj.cropBox) return;
+  const img=document.getElementById('lbImg');
+  const dw=parseFloat(img.style.width)||img.width, dh=parseFloat(img.style.height)||img.height;
+  const sx=dw/obj.origW, sy=dh/obj.origH;
+  const cb=obj.cropBox;
+  const box=document.getElementById('lbBox');
+  box.style.left=(cb.x*sx)+'px'; box.style.top=(cb.y*sy)+'px';
+  box.style.width=(cb.w*sx)+'px'; box.style.height=(cb.h*sy)+'px';
+  updateLbHeader();
+}
+
+function syncLightbox(obj) { if (lbOpen&&lbCurrentObj===obj) updateLbBoxDisplay(); }
+
+function lbResetCrop() {
+  if (!lbCurrentObj) return;
+  lbCurrentObj.cropBox={x:0,y:0,w:lbCurrentObj.origW,h:lbCurrentObj.origH};
+  if (cropRatioLocked) lbCurrentObj.cropBox=clampCropBox(lbCurrentObj,{...lbCurrentObj.cropBox,h:Math.round(lbCurrentObj.cropBox.w*cropRatioH/cropRatioW)});
+  updateLbBoxDisplay();
+  updateTileCropBoxDisplay(lbCurrentObj);
+}
+
+// Lightbox crop box drag / resize
+(function setupLbBox() {
+  const box=document.getElementById('lbBox');
+  // Drag to move
+  box.addEventListener('mousedown', e => {
+    if (e.target!==box&&!e.target.classList.contains('crop-lb-corners')&&!e.target.classList.contains('tl')&&!e.target.classList.contains('tr')&&!e.target.classList.contains('bl')&&!e.target.classList.contains('br')) return;
+    e.preventDefault();
+    const obj=lbCurrentObj; if (!obj) return;
+    const img=document.getElementById('lbImg');
+    const dw=parseFloat(img.style.width), dh=parseFloat(img.style.height);
+    const sx=obj.origW/dw, sy=obj.origH/dh;
+    const mx0=e.clientX, my0=e.clientY, cb0={...obj.cropBox};
+    const onMove=e=>{ obj.cropBox=clampCropBox(obj,{x:cb0.x+(e.clientX-mx0)*sx,y:cb0.y+(e.clientY-my0)*sy,w:cb0.w,h:cb0.h}); updateLbBoxDisplay(); updateTileCropBoxDisplay(obj); };
+    const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+    document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+  });
+
+  // Handles resize
+  box.querySelectorAll('.crop-lb-handle').forEach(h => {
+    const dir=[...h.classList].find(c=>['nw','n','ne','w','e','sw','s','se'].includes(c));
+    h.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const obj=lbCurrentObj; if (!obj) return;
+      const img=document.getElementById('lbImg');
+      const dw=parseFloat(img.style.width), dh=parseFloat(img.style.height);
+      const sx=obj.origW/dw, sy=obj.origH/dh;
+      const mx0=e.clientX, my0=e.clientY, cb0={...obj.cropBox};
+      const onMove=e=>{
+        const dx=(e.clientX-mx0)*sx, dy=(e.clientY-my0)*sy;
+        let {x,y,w,h}=cb0;
+        if(dir.includes('e'))w+=dx; if(dir.includes('s'))h+=dy;
+        if(dir.includes('w')){x+=dx;w-=dx;} if(dir.includes('n')){y+=dy;h-=dy;}
+        w=Math.max(10,w); h=Math.max(10,h);
+        if(cropRatioLocked&&cropRatioW>0&&cropRatioH>0){
+          if(dir.includes('n')||dir.includes('s')){w=Math.round(h*cropRatioW/cropRatioH);if(dir.includes('w'))x=cb0.x+cb0.w-w;}
+          else{h=Math.round(w*cropRatioH/cropRatioW);if(dir.includes('n'))y=cb0.y+cb0.h-h;}
+        }
+        obj.cropBox=clampCropBox(obj,{x,y,w,h}); updateLbBoxDisplay(); updateTileCropBoxDisplay(obj);
+      };
+      const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+      document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+    });
+  });
+})();
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (!lbOpen) return;
+  if (e.key==='Escape') closeLightbox();
+  if (e.key==='ArrowLeft') lbNavigate(-1);
+  if (e.key==='ArrowRight') lbNavigate(1);
+});
+
+/* ══════════════════════════════════
+   SMART DETECT
+══════════════════════════════════ */
+async function runSmartDetect() {
+  if (!imageFiles.length) { log(t('log_no_img')); return; }
+  const btn=document.getElementById('smartDetectBtn'); btn.disabled=true;
+  btn.querySelector('span').textContent=t('detecting');
+  log(t('log_detect_start'));
+  const apiUrl=document.getElementById('apiUrl').value.trim();
+  const maxDim=parseInt(document.getElementById('maxOutputDim').value)||1024;
+  for (const obj of imageFiles) {
+    obj.statusEl.textContent=t('detecting'); obj.statusEl.className='tile-status processing';
+    try {
+      let crop=null;
+      if (apiUrl) {
+        try {
+          const fd=new FormData(); fd.append('image',obj.file);
+          const res=await fetch(apiUrl,{method:'POST',body:fd}); const data=await res.json();
+          if (data.success&&data.boost_regions&&data.boost_regions.length>0) {
+            const region=data.boost_regions[0];
+            const cov=(region.width*region.height)/(obj.origW*obj.origH);
+            if (cov>=0.7) { crop={x:region.x,y:region.y,w:region.width,h:region.height}; }
+            else {
+              const opts={width:Math.min(obj.origW,Math.round(region.width*1.1)),height:Math.min(obj.origH,Math.round(region.height*1.1)),minScale:.5,boost:[data.boost_regions[0]]};
+              const r=await smartcrop.crop(obj.img,opts); const tc=r.topCrop; crop={x:tc.x,y:tc.y,w:tc.width,h:tc.height};
+            }
+          }
+        } catch(_) {}
+      }
+      if (!crop) { const r=await smartcrop.crop(obj.img,{width:maxDim,height:maxDim,minScale:1}); const tc=r.topCrop; crop={x:tc.x,y:tc.y,w:tc.width,h:tc.height}; }
+      if (cropRatioLocked&&cropRatioW>0&&cropRatioH>0) crop.h=Math.round(crop.w*cropRatioH/cropRatioW);
+      obj.cropBox=clampCropBox(obj,crop);
+      updateTileCropBoxDisplay(obj); syncLightbox(obj);
+      obj.statusEl.textContent=t('detect_done'); obj.statusEl.className='tile-status ok';
+    } catch(err) {
+      obj.statusEl.textContent=t('detect_fail'); obj.statusEl.className='tile-status';
+      log(`${t('log_detect_err')}: ${obj.name} — ${err.message}`);
+    }
+  }
+  btn.disabled=false; btn.querySelector('span').textContent=t('smart_detect');
+  log(t('log_detect_done'));
+}
+
+/* ══════════════════════════════════
+   SAVE
+══════════════════════════════════ */
+function getFormat(filename) {
+  const sel=document.getElementById('outputFormat').value;
+  const ext=filename.slice(filename.lastIndexOf('.')+1).toLowerCase();
+  if (sel==='preserve') {
+    if (['jpg','jpeg'].includes(ext)) return {mime:'image/jpeg',ext:'jpg'};
+    if (ext==='png') return {mime:'image/png',ext:'png'};
+    if (ext==='webp') return {mime:'image/webp',ext:'webp'};
+    return {mime:'image/jpeg',ext:'jpg'};
+  }
+  if (sel==='jpeg') return {mime:'image/jpeg',ext:'jpg'};
+  if (sel==='png') return {mime:'image/png',ext:'png'};
+  if (sel==='webp') return {mime:'image/webp',ext:'webp'};
+  return {mime:'image/jpeg',ext:'jpg'};
+}
+function getBaseName(name) { return name.substring(0,name.lastIndexOf('.'))||name; }
+function canvasToBlob(canvas,mime,quality) { return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),mime,quality)); }
+function doDownload(blob,filename) { const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href); }
+
+async function saveSingle(obj) {
+  const canvas=renderToCanvas(obj); const fmt=getFormat(obj.name);
+  const q=(fmt.mime==='image/jpeg'||fmt.mime==='image/webp')?parseInt(document.getElementById('qualitySetting').value)/100:1;
+  const blob=await canvasToBlob(canvas,fmt.mime,q);
+  const fn=`${getBaseName(obj.name)}_${canvas.width}x${canvas.height}.${fmt.ext}`;
+  doDownload(blob,fn); log(`${t('log_saved_single')}: ${fn}`);
+}
+
+async function processAndSaveAll(asZip) {
+  if (!imageFiles.length) { log(t('log_no_img')); return; }
+  const mode=asZip?t('zip_mode'):t('individual_mode');
+  log(t('log_processing',{n:imageFiles.length,m:mode}));
+  const zip=asZip?new JSZip():null; let count=0;
+  for (const obj of imageFiles) {
+    try {
+      const canvas=renderToCanvas(obj); const fmt=getFormat(obj.name);
+      const q=(fmt.mime==='image/jpeg'||fmt.mime==='image/webp')?parseInt(document.getElementById('qualitySetting').value)/100:1;
+      const blob=await canvasToBlob(canvas,fmt.mime,q);
+      const fn=`${getBaseName(obj.name)}_${canvas.width}x${canvas.height}.${fmt.ext}`;
+      if (asZip) { zip.file(fn,blob); } else { doDownload(blob,fn); await new Promise(r=>setTimeout(r,120)); }
+      const rc=obj.resultCanvas; rc.width=canvas.width; rc.height=canvas.height; rc.getContext('2d').drawImage(canvas,0,0);
+      obj.resultLayer.classList.add('visible');
+      obj.statusEl.textContent=`${canvas.width}×${canvas.height}`; obj.statusEl.classList.add('ok');
+      if (obj.dimsEl) obj.dimsEl.textContent=`${canvas.width} × ${canvas.height}`;
+      count++;
+    } catch(err) { log(`Error: ${obj.name} — ${err.message}`); }
+  }
+  if (asZip&&count>0) { log(t('log_zip_gen')); const content=await zip.generateAsync({type:'blob'}); doDownload(content,`images_${Date.now()}.zip`); log(t('log_zip_done',{n:count})); }
+  else if (!asZip) { log(t('log_saved_all',{n:count})); }
+}
+
+/* ══════════════════════════════════
+   INIT
+══════════════════════════════════ */
+// Apply initial thumb size after DOM is ready
+requestAnimationFrame(() => {
+  applyThumbSize();
+  updateThumbColsLabel();
+});
+</script>
+</body>
+</html>
